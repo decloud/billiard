@@ -5,6 +5,7 @@
 *	Table length: 2.7 meters (9 foot)
 *	Table width: 1.35 meters
 *	Ball diameter: 0.05715 meters (American-style)
+*	Ball radius: 0.028575 meters
 *
 * The following physics are used in the simulation:
 *	displacement = initial_displacement + velocity * time
@@ -42,8 +43,8 @@
 const float DEG2RAD = 3.14159/180;
 const float TIME_PASSED = 1.0/60;
 const float METER2COORD = TABLE_WIDTH/2.7; // double check this later
-const float MAX_FORCE = 2.0; // maximum amount of force on the cue ball
-const float BALL_RADIUS = 0.5 * 0.05715 * METER2COORD;
+const float MAX_FORCE = 3.0; //TODO: tweak
+const float BALL_RADIUS = 0.028575 * METER2COORD;
 
 GLfloat camRotX, camRotY, camPosX, camPosY, camPosZ;
 GLuint cueBallList, tableList;
@@ -51,6 +52,10 @@ GLfloat tableZ = 0.30;
 
 float cueBallPower = 0.0f;
 int cueBallAngle = 90;
+
+// static array to hold all 15 balls
+// balls[0] is cue ball
+Ball balls[16];
 
 // temporary variables for cue ball
 float cbX = 0.675;
@@ -76,6 +81,26 @@ void drawCircle(float radius)
 
    glEnd();
 }
+
+/*
+* Detect whether or not the ball is going to collide with the boundaries
+* of the table. If it does, return the new directions.
+*	returns 1 if the ball will collide and direction is changed
+*	returns 0 otherwise
+*/
+int collideWithTable(float x, float y, float &DX, float &DY)
+{
+	if (x - 0.028575 < 0 || x + 0.028575 > 2.7) {
+		DX = -1 * DX;
+		return 1;
+	} else if(y - 0.028575 < 0 || y + 0.028575 > 1.35) {
+		DY = -1 * DY;
+		return 1;
+	}
+
+	return 0;
+}
+
 
 /*
 * Draw a green table and the pockets.
@@ -189,18 +214,17 @@ void display(void)
 /*
 * Calculate and update the parameters of the balls.
 */
-int i = 0;
 void update(void)
 {
 	//DEBUG: Update is called
 	//printf("update is called! cbX: %f cbY: %f\n", cbX, cbY);
 
 	//Assume that the program calls update every 1/60 second
-
+	collideWithTable(cbX, cbY, cbDX, cbDY);
 	cbX = cbX + cbDX * cbSpeed * TIME_PASSED;
 	cbY = cbY + cbDY * cbSpeed * TIME_PASSED;
 
-	cbSpeed = cbSpeed - 1 * TIME_PASSED;
+	cbSpeed = cbSpeed - 0.1 * TIME_PASSED; //TODO: tweak
 	if (cbSpeed < 0)
 		cbSpeed = 0;
 	else
@@ -318,6 +342,7 @@ int main( int argc, char* argv[])
 
 	glutCreateWindow("Billiard");
 	setupRenderingContext();
+	gameSetup();
 
 	glutDisplayFunc(display);
 	glutIdleFunc(update);
@@ -327,7 +352,7 @@ int main( int argc, char* argv[])
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
 
-	//glutTimerFunc(1000/FPS, update, 0);
+	//glutTimerFunc(1000/FPS, update, 0); TODO: tweak
 
 	glutMainLoop();
 }
