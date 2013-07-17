@@ -3,7 +3,8 @@ Current:
 - calculate physics
 - create ball class
 - add collision detection
-	- take care of 
+	- take care of sides of table
+	- table care of coliding with 1 ball
 - find out scaling factor
 
 
@@ -20,3 +21,4 @@ Future:
 - add textures
 - add shaders
 - add cue stick distance
+- figure out the coordinates of the balls

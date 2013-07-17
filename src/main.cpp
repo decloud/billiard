@@ -41,19 +41,20 @@
 
 const float DEG2RAD = 3.14159/180;
 const float TIME_PASSED = 1.0/60;
-const float METER2COORD = WINDOW_WIDTH/2.7; // double check this later
-const float MAX_FORCE = 25; // maximum amount of force on the cue ball
+const float METER2COORD = TABLE_WIDTH/2.7; // double check this later
+const float MAX_FORCE = 2.0; // maximum amount of force on the cue ball
+const float BALL_RADIUS = 0.5 * 0.05715 * METER2COORD;
 
 GLfloat camRotX, camRotY, camPosX, camPosY, camPosZ;
 GLuint cueBallList, tableList;
 GLfloat tableZ = 0.30;
 
 float cueBallPower = 0.0f;
-int cueBallAngle = 0;
+int cueBallAngle = 90;
 
 // temporary variables for cue ball
-float cbX = 100.0;
-float cbY = 100.0;
+float cbX = 0.675;
+float cbY = 0.675;
 float cbZ = 0.0f;
 
 float cbDX = 0.0f;
@@ -96,9 +97,9 @@ void drawBalls(void)
 {
 	glPushMatrix();
 	{
-		glTranslatef(BORDER + cbX, BORDER + cbY, 0);
+		glTranslatef(BORDER + cbX * METER2COORD, BORDER + cbY * METER2COORD, 0);
 		glColor3f(1,1,1);
-		drawCircle(20);
+		drawCircle(BALL_RADIUS);
 	}
 	glPopMatrix();
 }
@@ -192,15 +193,18 @@ int i = 0;
 void update(void)
 {
 	//DEBUG: Update is called
-	printf("update is called! cbX: %f cbY: %f TIME_PASSED %f\n", cbX, cbY, TIME_PASSED);
-	//NOTE: Might keep track of changes and only call glutPostRedisplay when necessary
+	//printf("update is called! cbX: %f cbY: %f\n", cbX, cbY);
 
 	//Assume that the program calls update every 1/60 second
 
 	cbX = cbX + cbDX * cbSpeed * TIME_PASSED;
 	cbY = cbY + cbDY * cbSpeed * TIME_PASSED;
 
-	glutPostRedisplay();
+	cbSpeed = cbSpeed - 1 * TIME_PASSED;
+	if (cbSpeed < 0)
+		cbSpeed = 0;
+	else
+		glutPostRedisplay();
 }
 
 /*
@@ -239,9 +243,8 @@ void keyboard(unsigned char key, int x, int y)
 				// cueBall->dy = cos(cueBallAngle * PI / 180);
 				// cueBall->speed = cueBallPower;
 
-				// reset the power and angle
+				// reset the power ONLY
 				cueBallPower = 0;
-				cueBallAngle = 0;
 
 				//DEBUG: Printing out parameters of the cue ball
 				printf("cbDX: %f cbDY: %f cbSpeed: %f\n", cbDX, cbDY, cbSpeed);
@@ -288,8 +291,7 @@ void specialKeys(int key, int x, int y)
 	}
 
 	//DEBUG: Print out cue ball power and angle
-	printf("cueball power: %f\n", cueBallPower);
-	printf("cueBall angle: %d\n", cueBallAngle);
+	printf("power: %f angle: %d\n", cueBallPower, cueBallAngle);
 }
 
 /*
