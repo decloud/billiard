@@ -1,0 +1,22 @@
+Current:
+- add another ball
+- calculate physics
+- create ball class
+- add collision detection
+	- take care of 
+- find out scaling factor
+
+
+
+Future:
+- convert from 2d to 3d
+	- add viewing fustrum
+- add the pieces of the table
+- draw the pockets
+- enable camera movement
+- add multiple balls
+- implement mouse functions
+- color the balls
+- add textures
+- add shaders
+- add cue stick distance
