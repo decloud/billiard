@@ -1,7 +1,5 @@
 Current:
-- add another ball
 - calculate physics
-- create ball class
 - add collision detection
 	- table care of coliding with 1 ball
 
