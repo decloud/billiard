@@ -26,10 +26,13 @@ include_directories(
 	${GLUT_INCLUDE_DIR}
 	${GLEW_INCLUDE_DIR})
 
-add_executable(billiards 
+add_executable(billiards
+	src/Ball.h	src/Ball.cpp
+	src/Table.h	src/Table.cpp
+	src/Billiard.h	src/Billiard.cpp
 	src/main.cpp)
 
-target_link_libraries(billiards 
-	${GLUT_LIBRARIES} 
-	${OPENGL_LIBRARIES} 
+target_link_libraries(billiards
+	${GLUT_LIBRARIES}
+	${OPENGL_LIBRARIES}
 	${GLEW_LIBRARY})

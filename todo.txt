@@ -1,7 +1,10 @@
 Current:
-- calculate physics
-- add collision detection
-	- table care of coliding with 1 ball
+- implement functions in ball class
+	- update velocity
+
+
+
+
 
 
 
