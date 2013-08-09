@@ -40,16 +40,16 @@
 #define TABLE_LENGTH 960
 #define TABLE_WIDTH 480
 #define BORDER 10
-#define FPS 25
 #define PI 3.141592653589793238462
 #define T_LENGTH 2.7
 #define B_RADIUS 0.028575
 #define NUM_OF_BALLS 16
+#define FPS 5
 
 const float T_WIDTH = T_LENGTH/2;
 const float DEG2RAD = PI/180;
 const float METER2COORD = TABLE_LENGTH/T_LENGTH;
-const float MAX_FORCE = 100.0; //TODO: tweak
+const float MAX_FORCE = 10.0; //TODO: tweak
 const float BALL_RADIUS = B_RADIUS * METER2COORD;
 const float ROOT_THREE = sqrt(3);
 const float FRAME_TIME = 1.0f / FPS;
@@ -104,7 +104,7 @@ void drawTable(void)
 void drawBalls(void)
 {
 	//NOTE: Place to draw balls
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < NUM_OF_BALLS; i++)
 	{
 		glPushMatrix();
 		{
@@ -173,16 +173,16 @@ void setupGame()
 		counter++;
 	}
 
-	//DEBUG: create and place a custom ball for ball[1]
-	balls[1]->position.set(T_LENGTH/4 + 4 * B_RADIUS,
-						T_LENGTH/4 + B_RADIUS, 0.0f);
+	// //DEBUG: create and place a custom ball for ball[1]
+	// balls[1]->position.set(T_LENGTH/4 + 4 * B_RADIUS,
+	// 					T_LENGTH/4 + B_RADIUS, 0.0f);
 
-	//DEBUG: print out the position of all the balls
-	for (int i = 0; i < 2; i++)
-	{
-		printf("Ball %d %f %f %f\n", i, balls[i]->position.x,
-			balls[i]->position.y, balls[i]->position.z);
-	}
+	// //DEBUG: print out the position of all the balls
+	// for (int i = 0; i < 2; i++)
+	// {
+	// 	printf("Ball %d %f %f %f\n", i, balls[i]->position.x,
+	// 		balls[i]->position.y, balls[i]->position.z);
+	// }
 }
 
 
@@ -301,26 +301,37 @@ void updatePhysics()
 {
 	printf("updatePhysics is called!\n");
 	//TODO: update all the balls
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < NUM_OF_BALLS; i++)
 	{
 		// first, update the ball's position if it's moving
-		if (balls[i]->velocity.length() >= 0.0f)
+		if (balls[i]->velocity.length() > 0.0f)
 		{
-			printf("Ball %d position before: ", i);
-			balls[i]->position.print();
+			//printf("Ball %d position before: ", i);
+			//balls[i]->position.print();
 
 			balls[i]->position = balls[i]->position + (FRAME_TIME * balls[i]->velocity);
 
-			printf("Ball %d position after: ", i);
-			balls[i]->position.print();
+			// printf("Ball %d position after: ", i);
+			// balls[i]->position.print();
 
 		}
 
 		// now check for collision with table
+		if (balls[i]->position.x + balls[i]->radius > table->length
+			|| balls[i]->position.x - balls[i]->radius < 0 )
+		{
+			balls[i]->velocity.x = -1 * balls[i]->velocity.x;
+		}
+
+		if (balls[i]->position.y + balls[i]->radius > table->width
+			|| balls[i]->position.y - balls[i]->radius < 0 )
+		{
+			balls[i]->velocity.y = -1 * balls[i]->velocity.y;
+		}
 
 		// now check for collision with any other ball
 
-		for (int j = i + 1; j < 2; j++)
+		for (int j = i + 1; j < NUM_OF_BALLS; j++)
 		{
 			collide(balls[i], balls[j], FRAME_TIME);
 		}
@@ -334,33 +345,36 @@ void updatePhysics()
 	}
 }
 
-clock_t startTime;
+time_t startTime;
 float accumulator = 0.0f;
 //float alpha = 0.0f;
-
 /*
 * Update the parameters of the balls.
 */
 void update()
 {
-	clock_t currentTime = clock();
-	accumulator += 10 * (currentTime - startTime) / (double) CLOCKS_PER_SEC;
-	startTime = currentTime;
+	// time_t currentTime = time(NULL);
+	// accumulator += difftime(currentTime, startTime);
+	// startTime = currentTime;
 
-	if (accumulator > 0.2f)
-		accumulator = 0.2f;
+	// // if (accumulator > 0.2f)
+	// // 	accumulator = 0.2f;
 
-	//printf("FRAME_TIME: %f\n", FRAME_TIME);
-	//printf("accumulator: %f\n", accumulator);
+	// if (accumulator > 1.f)
+	// 	accumulator = 1.f;
 
-	while (accumulator > FRAME_TIME)
-	{
-		updatePhysics();
-		accumulator -= FRAME_TIME;
-	}
+	// printf("accumulator: %f\n", accumulator);
+	// printf("FRAME_TIME: %f\n", FRAME_TIME);
+
+	// while (accumulator >= FRAME_TIME)
+	// {
+	// 	updatePhysics();
+	// 	accumulator -= FRAME_TIME;
+	// }
 
 	//alpha = accumulator / FRAME_TIME;
 
+	updatePhysics();
 	glutPostRedisplay();
 }
 
@@ -398,7 +412,7 @@ void keyboard(unsigned char key, int x, int y)
 									0.0f);
 
 				cueBallPower = 0; // reset the power
-				startTime = clock();
+				startTime = time(NULL);
 
 				//DEBUG: Printing out parameters of the cue ball
 				printf("Cueball Velocity: x: %f y: %f z: %f\n",
