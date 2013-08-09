@@ -1,23 +1,3 @@
-/*
-* An OpenGL implementation of billiards.
-*
-* The following are the dimensions of the table and balls:
-*	Table length: 2.7 meters (9 foot)
-*	Table width: 1.35 meters
-*	Ball diameter: 0.05715 meters (American-style)
-*	Ball radius: 0.028575 meters
-*
-* The following physics are used in the simulation:
-*	displacement = initial_displacement + velocity * time
-*	velocity = initial_velocity + acceleration * time
-*
-* The weight of the balls and the coefficient of friction are not taken into
-* account. They might be incorporated in the future.
-*
-* Author: Qian Yu
-*/
-
-#include <stdio.h>
 #include "Billiard.h"
 
 #include <GL/glew.h>
@@ -51,8 +31,6 @@ int main( int argc, char* argv[])
 	glutSpecialFunc(specialKeys);
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
-
-	//glutTimerFunc(1000/FPS, update, 0); TODO: tweak
 
 	glutMainLoop();
 }

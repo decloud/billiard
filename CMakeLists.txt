@@ -9,7 +9,7 @@ option(BUILD_DEBUG "Turn on the debug mode" OFF)
 ## Compiler
 # set compiler flags for debug/release
 if ( BUILD_DEBUG )
-    add_definitions(-DDEBUG)
+    add_definitions(-DDEBUG -Wall)
     set(CMAKE_BUILD_TYPE Debug)
 else ()
     add_definitions(-Wno-deprecated)
@@ -26,9 +26,11 @@ include_directories(
 	${GLUT_INCLUDE_DIR}
 	${GLEW_INCLUDE_DIR})
 
+# add the executable
 add_executable(billiards
-	src/Ball.h	src/Ball.cpp
-	src/Table.h	src/Table.cpp
+	src/Vector.h	src/Vector.cpp
+	src/Ball.h		src/Ball.cpp
+	src/Table.h		src/Table.cpp
 	src/Billiard.h	src/Billiard.cpp
 	src/main.cpp)
 

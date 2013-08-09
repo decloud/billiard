@@ -1,7 +1,28 @@
+/*
+* An OpenGL implementation of billiards.
+*
+* The following are the dimensions of the table and balls:
+*	Table length: 2.7 meters (9 foot)
+*	Table width: 1.35 meters
+*	Ball diameter: 0.05715 meters (American-style)
+*	Ball radius: 0.028575 meters
+*
+* The following physics are used in the simulation:
+*	displacement = initial_displacement + velocity * time
+*	velocity = initial_velocity + acceleration * time
+*
+* The weight of the balls and the coefficient of friction are not taken into
+* account. They might be incorporated in the future.
+*
+* Author: Qian Yu
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include "Billiard.h"
+#include "Vector.h"
+#include <time.h>
 
 #include <GL/glew.h>
 #if defined(_WIN32)
@@ -19,7 +40,7 @@
 #define TABLE_LENGTH 960
 #define TABLE_WIDTH 480
 #define BORDER 10
-#define FPS 60
+#define FPS 25
 #define PI 3.141592653589793238462
 #define T_LENGTH 2.7
 #define B_RADIUS 0.028575
@@ -27,11 +48,11 @@
 
 const float T_WIDTH = T_LENGTH/2;
 const float DEG2RAD = PI/180;
-const float TIME_PASSED = 1.0/60;
 const float METER2COORD = TABLE_LENGTH/T_LENGTH;
-const float MAX_FORCE = 3.0; //TODO: tweak
+const float MAX_FORCE = 100.0; //TODO: tweak
 const float BALL_RADIUS = B_RADIUS * METER2COORD;
 const float ROOT_THREE = sqrt(3);
+const float FRAME_TIME = 1.0f / FPS;
 
 GLfloat white[] = {1, 1, 1, 1};
 GLfloat green[] = {0, 1, 0, 1};
@@ -49,9 +70,6 @@ float cueBallPower = 0.0f;
 int cueBallAngle = 90;
 
 Table* table;
-
-// static array to hold all 15 balls
-// balls[0] is cue ball
 Ball* balls[NUM_OF_BALLS];
 
 void drawCircle(float radius)
@@ -85,146 +103,23 @@ void drawTable(void)
 */
 void drawBalls(void)
 {
-	//NOTE: draw only 4 balls right now
-	for (int i = 0; i < 4; i++)
+	//NOTE: Place to draw balls
+	for (int i = 0; i < 2; i++)
 	{
 		glPushMatrix();
 		{
-			glTranslatef(BORDER + balls[i]->x * METER2COORD,
-						BORDER + balls[i]->y * METER2COORD, 0);
-			glColor4fv(white);
+			glTranslatef(BORDER + balls[i]->position.x * METER2COORD,
+						BORDER + balls[i]->position.y * METER2COORD, 0.0f);
+
+			if (i == 0)
+				glColor4fv(white);
+			else
+				glColor4fv(red);
+
 			drawCircle(BALL_RADIUS);
 		}
 		glPopMatrix();
 	}
-}
-
-/*
-* Detects whether or not the ball is going to collide with the boundaries
-* of the table. If it does, return the new directions.
-*	returns "true" if the ball will collide and direction is changed
-*	returns "false" otherwise
-*/
-bool collideWith(Ball *ball, Table *table)
-{
-	bool collided = false;
-
-	if (ball->x - 0.028575 < 0 || ball->x + 0.028575 > 2.7) {
-		ball->vx = -1 * ball->vx;
-		return true;
-	}
-
-	if(ball->y - 0.028575 < 0 || ball->y + 0.028575 > 1.35) {
-		ball->vy = -1 * ball->vy;
-		return true;
-	}
-	return collided;
-}
-
-/*
-* Detects whether or not ball1 is going to collide with ball2.
-* If it does, calulate the new speed and directions of both balls.
-*	returns "true" if the balls will collide
-*	returns "false" otherwise
-*/
-bool collideWith(Ball *ball1, Ball *ball2)
-{
-	// special case where the ball is compared with itself
-	if (ball1->id == ball2->id)
-		return false;
-
-	float distance = pow(ball1->x - ball2->x, 2) + pow(ball1->y - ball2->y, 2);
-
-	if (distance > pow(2 * B_RADIUS, 2))
-		return false;
-
-	/* The physics of ball collision is based off the diagram on
-	http://www.real-world-physics-problems.com/physics-of-billiards.html*/
-
-	float V1A[2] = {ball1->vx, ball1->vy};
-
-	// First, calculate the vector V2B and normalize it
-	float V2B[2] = {V2B[0] = ball2->x - ball1->x, V2B[1] = ball2->y - ball1->y};
-	float V2Blength = sqrt(V2B[0] * V2B[0] + V2B[1] * V2B[1]);
-	V2B[0] = V2B[0] / V2Blength;
-	V2B[1] = V2B[1] / V2Blength;
-
-	// Then compute the vector V2A and normalize it
-	// The x component is equal to the cos of V1A and V2B
-	// The y component is equal to the sin of V1A and V2B
-	float V2A[2] = {V1A[0] * V2B[0] - V1A[1] * V2B[1],
-					V1A[0] * V2B[1] + V1A[1] * V2B[0]};
-
-	// Now compute the magnitue of V2A and V2B
-	// The speed can be computed using vector addition
-	// The magnitude of V2A is V1A * sin
-	// The magnitude of V2B is V1A * cos
-	float V2Aspeed = ball1->speed * V2A[1];
-	float V2Bspeed = ball1->speed * V2A[0];
-
-	// Update both ball1 and ball2
-	ball1->setVelocity(V2A[0], V2A[1], V2Aspeed);
-	ball2->addVelocity(V2B[0], V2B[1], V2Bspeed);
-
-	// NOTE: There might be an issue where I am adding the components to the second vector without calculating collision with the first. Will investagate later
-
-	return true;
-}
-
-
-
-/*void collideWithBall(Ball &b1, Ball &b2)
-{
-	float V1A[2] = {b1.vx, b1.vy};
-
-	// First, calculate the vector V2B and normalize it
-	float V2B[2] = {V2B[0] = b2.x - b1.x, V2B[1] = b2.y - b1.y};
-	float V2Blength = sqrt(V2B[0] * V2B[0] + V2B[1] * V2B[1]);
-	V2B[0] = V2B[0] / V2Blength;
-	V2B[1] = V2B[1] / V2Blength;
-
-	// Then compute the vector V2A and normalize it
-	// The x component is equal to the cos of V1A and V2B
-	// The y component is equal to the sin of V1A and V2B
-	float V2A[2] = {V1A[0] * V2B[0] - V1A[1] * V2B[1],
-					V1A[0] * V2B[1] + V1A[1] * V2B[0]};
-
-	// Now compute the magnitue of V2A and V2B
-	// The speed can be computed using vector addition
-	// The magnitude of V2A is V1A * sin
-	// The magnitude of V2B is V1A * cos
-	float V2Aspeed = b1.speed * V2A[1];
-	float V2Bspeed = b1.speed * V2A[0];
-
-	// Update all the values
-	b1.vx = V2A[0];
-	b1.vy = V2A[1];
-	b1.speed = V2Aspeed;
-
-	b2.vx = V2B[0];
-	b2.vy = V2B[1];
-	b2.speed = V2Bspeed;
-	//NOTE: the second vector is currently not correctly updated
-}*/
-
-/*
-* Perform collision detection by checking
-*	collision with table
-*	TODO: collision with pockets
-*	collision with another ball
-* in that order.
-*/
-bool collisionDetection(Ball *ball)
-{
-	if (collideWith(ball, table))
-		return true;
-
-	for (int i = 0; i < 16; i++)
-	{
-		if (collideWith(ball, balls[i]))
-			return true;
-	}
-	return false;
 }
 
 /*
@@ -255,17 +150,39 @@ void setupGame()
 		11 		12 		13 		14 		15
 
 	Note that the the radius of any three touching ball forms an
-	equalaterial triangle.
+	equalaterial triangle. The distance between each row is root_three * r.
+	The distance between each column is 2*r.
 	*/
 
-	balls[0]->setLocation(T_LENGTH/4, T_LENGTH/4, 0.0f); // cue ball
-	balls[1]->setLocation(T_LENGTH*3/4, T_LENGTH/4, 0.0f);
-	balls[2]->setLocation(T_LENGTH*3/4 + ROOT_THREE * B_RADIUS,
-							T_LENGTH/4, 0.0f);
-	balls[3]->setLocation(T_LENGTH*3/4 + ROOT_THREE * B_RADIUS,
-							T_LENGTH/4 - B_RADIUS, 0.0f);
+	float x = T_LENGTH/4;
+	float y = T_LENGTH/4;
+	balls[0]->position.set(x, y, 0.0f); // cue ball
 
-	//TODO: add the rest of the coordinates
+	x = x * 3;
+	int counter = 0;
+	for (int i = 1; i < 16; i++)
+	{
+		if (i == 2 || i == 4 || i == 7 || i == 11)
+		{
+			x = x + ROOT_THREE * B_RADIUS;
+			y = y - B_RADIUS;
+			counter = 0;
+		}
+
+		balls[i]->position.set(x, y + 2 * counter * B_RADIUS, 0.0f);
+		counter++;
+	}
+
+	//DEBUG: create and place a custom ball for ball[1]
+	balls[1]->position.set(T_LENGTH/4 + 4 * B_RADIUS,
+						T_LENGTH/4 + B_RADIUS, 0.0f);
+
+	//DEBUG: print out the position of all the balls
+	for (int i = 0; i < 2; i++)
+	{
+		printf("Ball %d %f %f %f\n", i, balls[i]->position.x,
+			balls[i]->position.y, balls[i]->position.z);
+	}
 }
 
 
@@ -343,36 +260,108 @@ void display(void)
 	glutSwapBuffers();
 }
 
-/*
-* Calculate and update the parameters of the balls.
-*/
-void update(void)
+float collisionPoint(Ball *ball1, Ball *ball2, float timePassed, float ballDistance, float collisionDistance)
 {
-	//Assume that the program calls update every 1/60 second
-	//NOTE: draw only 4 balls right now
-	for (int i = 0; i < 4; i++)
+	return timePassed;
+}
+
+void collide(Ball *ball1, Ball *ball2, float timePassed)
+{
+	Vector normalPlane = ball2->position - ball1->position;
+	float ballDistance = normalPlane.length();
+
+	float collisionDistance = ball1->radius + ball2->radius;
+
+	if (ballDistance < collisionDistance)
 	{
-		// only check for balls that are moving
-		if (balls[i]->speed <= 0.0f)
-			continue;
+		float collisionTime = collisionPoint(ball1, ball2, timePassed,
+			ballDistance, collisionDistance);
 
-		// update the current speed and location of the ball
-		balls[i]->x = balls[i]->x +
-						balls[i]->vx * balls[i]->speed * TIME_PASSED;
+		normalPlane.normalize();
 
-		balls[i]->y = balls[i]->y +
-						balls[i]->vy * balls[i]->speed * TIME_PASSED;
+		Vector collisionPlane(-normalPlane.y, normalPlane.x, 0);
 
-		balls[i]->speed = balls[i]->speed - 1 * TIME_PASSED; //TODO: tweak
+		float n_vel2 = Vector::dot(normalPlane, ball1->velocity);
+		float c_vel1 = Vector::dot(collisionPlane, ball1->velocity);
+		float n_vel1 = Vector::dot(normalPlane, ball2->velocity);
+		float c_vel2 = Vector::dot(collisionPlane, ball2->velocity);
 
-		// perform collision detection and if true, call glutpostredisplay
-		collisionDetection(balls[i]);
+		Vector vel1 = (n_vel1 * normalPlane) + (c_vel1 * collisionPlane);
+		Vector vel2 = (n_vel2 * normalPlane) + (c_vel2 * collisionPlane);
 
-		if (balls[i]->speed <= 0)
-			balls[i]->resetVelocity();
-		else
-			glutPostRedisplay();
+		ball1->position = ball1->position + (collisionTime * vel1);
+		ball2->position = ball2->position + (collisionTime * vel2);
+
+		ball1->velocity = vel1;
+		ball2->velocity = vel2;
 	}
+}
+
+void updatePhysics()
+{
+	printf("updatePhysics is called!\n");
+	//TODO: update all the balls
+	for (int i = 0; i < 2; i++)
+	{
+		// first, update the ball's position if it's moving
+		if (balls[i]->velocity.length() >= 0.0f)
+		{
+			printf("Ball %d position before: ", i);
+			balls[i]->position.print();
+
+			balls[i]->position = balls[i]->position + (FRAME_TIME * balls[i]->velocity);
+
+			printf("Ball %d position after: ", i);
+			balls[i]->position.print();
+
+		}
+
+		// now check for collision with table
+
+		// now check for collision with any other ball
+
+		for (int j = i + 1; j < 2; j++)
+		{
+			collide(balls[i], balls[j], FRAME_TIME);
+		}
+
+		// now update velocity
+
+
+		//printf("Ball %d ", i);
+		//balls[i]->position.print();
+		//balls[i]->velocity.print();
+	}
+}
+
+clock_t startTime;
+float accumulator = 0.0f;
+//float alpha = 0.0f;
+
+/*
+* Update the parameters of the balls.
+*/
+void update()
+{
+	clock_t currentTime = clock();
+	accumulator += 10 * (currentTime - startTime) / (double) CLOCKS_PER_SEC;
+	startTime = currentTime;
+
+	if (accumulator > 0.2f)
+		accumulator = 0.2f;
+
+	//printf("FRAME_TIME: %f\n", FRAME_TIME);
+	//printf("accumulator: %f\n", accumulator);
+
+	while (accumulator > FRAME_TIME)
+	{
+		updatePhysics();
+		accumulator -= FRAME_TIME;
+	}
+
+	//alpha = accumulator / FRAME_TIME;
+
+	glutPostRedisplay();
 }
 
 /*
@@ -402,23 +391,28 @@ void keyboard(unsigned char key, int x, int y)
 				are decomposed into a pair of unit vectors that
 				points to the direction and are assigned to the
 				cue ball.*/
-				balls[0]->vx = sin(cueBallAngle * PI / 180);
-				balls[0]->vy = cos(cueBallAngle * PI / 180);
-				balls[0]->speed = cueBallPower * MAX_FORCE;
 
-				// reset the power ONLY
-				cueBallPower = 0;
+				float speed = cueBallPower * MAX_FORCE / METER2COORD;
+				balls[0]->velocity.set(sin(cueBallAngle * DEG2RAD) * speed,
+									cos(cueBallAngle * DEG2RAD) * speed,
+									0.0f);
+
+				cueBallPower = 0; // reset the power
+				startTime = clock();
 
 				//DEBUG: Printing out parameters of the cue ball
-				printf("vx: %f vy: %f speed: %f\n",
-						balls[0]->vx, balls[0]->vy, balls[0]->vy);
+				printf("Cueball Velocity: x: %f y: %f z: %f\n",
+										balls[0]->velocity.x,
+										balls[0]->velocity.y,
+										balls[0]->velocity.z);
+				//printf("Start time: %ld\n", startTime);
 
 				glutPostRedisplay();
 			}
 			break;
 	}
 	//DEBUG: Print out the key that is pressed
-	//printf("the key is: %c\n", key);
+	//printf("Key pressed: %c\n", key);
 }
 
 /*

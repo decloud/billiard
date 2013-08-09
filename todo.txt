@@ -1,12 +1,6 @@
 Current:
-- implement functions in ball class
-	- update velocity
-
-
-
-
-
-
+- fix position of the balls
+- fix bug with collision detection
 
 Future:
 - convert from 2d to 3d
@@ -20,5 +14,5 @@ Future:
 - add textures
 - add shaders
 - add cue stick distance
-- figure out the coordinates of the balls
 - ensure the game runs at 60 fps
+
