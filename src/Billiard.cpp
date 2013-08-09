@@ -151,8 +151,11 @@ void setupGame()
 
 	Note that the the radius of any three touching ball forms an
 	equalaterial triangle. The distance between each row is root_three * r.
-	The distance between each column is 2*r.
+	The distance between each column is 2*r. A little extra room is added
+	inbetween all of the balls.
 	*/
+
+	const float epsilon = 0.001f;
 
 	float x = T_LENGTH/4;
 	float y = T_LENGTH/4;
@@ -164,12 +167,12 @@ void setupGame()
 	{
 		if (i == 2 || i == 4 || i == 7 || i == 11)
 		{
-			x = x + ROOT_THREE * B_RADIUS;
-			y = y - B_RADIUS;
+			x = x + ROOT_THREE * B_RADIUS + epsilon;
+			y = y - B_RADIUS + epsilon;
 			counter = 0;
 		}
 
-		balls[i]->position.set(x, y + 2 * counter * B_RADIUS, 0.0f);
+		balls[i]->position.set(x + epsilon, y + 2 * counter * B_RADIUS + epsilon, 0.0f);
 		counter++;
 	}
 
@@ -260,22 +263,32 @@ void display(void)
 	glutSwapBuffers();
 }
 
-float collisionPoint(Ball *ball1, Ball *ball2, float timePassed, float ballDistance, float collisionDistance)
+float collisionPoint(Ball *ball1, Ball *ball2, float frameTime, float distanceAtFrameEnd, float collisionDistance)
 {
-	return timePassed;
+	Vector ball1FrameStartPosition = ball1->position - (frameTime * ball1->velocity);
+	Vector ball2FrameStartPosition = ball2->position - (frameTime * ball2->velocity);
+
+	float distanceAtFrameStart = (ball2FrameStartPosition  - ball1FrameStartPosition ).length();
+
+	float collisionTime = frameTime * (distanceAtFrameStart - collisionDistance ) / (distanceAtFrameStart - distanceAtFrameEnd) ;
+
+	ball1->position = ball1FrameStartPosition + (collisionTime * ball1->velocity);
+	ball2->position = ball2FrameStartPosition + (collisionTime * ball2->velocity);
+
+	return (frameTime - collisionTime);
 }
 
-void collide(Ball *ball1, Ball *ball2, float timePassed)
+void collide(Ball *ball1, Ball *ball2, float frameTime)
 {
 	Vector normalPlane = ball2->position - ball1->position;
-	float ballDistance = normalPlane.length();
+	float distanceAtFrameEnd = normalPlane.length();
 
 	float collisionDistance = ball1->radius + ball2->radius;
 
-	if (ballDistance < collisionDistance)
+	if (distanceAtFrameEnd <= collisionDistance)
 	{
-		float collisionTime = collisionPoint(ball1, ball2, timePassed,
-			ballDistance, collisionDistance);
+		float collisionTime = collisionPoint(ball1, ball2, frameTime,
+			distanceAtFrameEnd, collisionDistance);
 
 		normalPlane.normalize();
 
@@ -299,21 +312,14 @@ void collide(Ball *ball1, Ball *ball2, float timePassed)
 
 void updatePhysics()
 {
-	printf("updatePhysics is called!\n");
+	//printf("updatePhysics is called!\n");
 	//TODO: update all the balls
 	for (int i = 0; i < NUM_OF_BALLS; i++)
 	{
 		// first, update the ball's position if it's moving
 		if (balls[i]->velocity.length() > 0.0f)
 		{
-			//printf("Ball %d position before: ", i);
-			//balls[i]->position.print();
-
 			balls[i]->position = balls[i]->position + (FRAME_TIME * balls[i]->velocity);
-
-			// printf("Ball %d position after: ", i);
-			// balls[i]->position.print();
-
 		}
 
 		// now check for collision with table
@@ -330,7 +336,6 @@ void updatePhysics()
 		}
 
 		// now check for collision with any other ball
-
 		for (int j = i + 1; j < NUM_OF_BALLS; j++)
 		{
 			collide(balls[i], balls[j], FRAME_TIME);
@@ -339,9 +344,6 @@ void updatePhysics()
 		// now update velocity
 
 
-		//printf("Ball %d ", i);
-		//balls[i]->position.print();
-		//balls[i]->velocity.print();
 	}
 }
 
