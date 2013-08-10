@@ -1,22 +1,3 @@
-/*
-* An OpenGL implementation of billiards.
-*
-* The following are the dimensions of the table and balls:
-*	Table length: 2.7 meters (9 foot)
-*	Table width: 1.35 meters
-*	Ball diameter: 0.05715 meters (American-style)
-*	Ball radius: 0.028575 meters
-*
-* The following physics are used in the simulation:
-*	displacement = initial_displacement + velocity * time
-*	velocity = initial_velocity + acceleration * time
-*
-* The weight of the balls and the coefficient of friction are not taken into
-* account. They might be incorporated in the future.
-*
-* Author: Qian Yu
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -24,35 +5,20 @@
 #include "Vector.h"
 #include <time.h>
 
-#include <GL/glew.h>
-#if defined(_WIN32)
-#   include <GL/wglew.h>
-#endif
-
-#if defined(__APPLE__) || defined(MACOSX)
-#   include <GLUT/glut.h>
-#else
-#   include <GL/glut.h>
-#endif
-
-#define WINDOW_WIDTH 980
-#define WINDOW_HEIGHT 500
-#define TABLE_LENGTH 960
-#define TABLE_WIDTH 480
-#define BORDER 10
-#define PI 3.141592653589793238462
-#define T_LENGTH 2.7
-#define B_RADIUS 0.028575
 #define NUM_OF_BALLS 16
-#define FPS 5
+#define NUM_OF_POCKETS 6
 
-const float T_WIDTH = T_LENGTH/2;
-const float DEG2RAD = PI/180;
-const float METER2COORD = TABLE_LENGTH/T_LENGTH;
-const float MAX_FORCE = 10.0; //TODO: tweak
-const float BALL_RADIUS = B_RADIUS * METER2COORD;
-const float ROOT_THREE = sqrt(3);
-const float FRAME_TIME = 1.0f / FPS;
+const float converted_table_length = window_width - 2 * border;
+const float converted_table_width = window_height - 2 * border;
+const float meter_to_coord = converted_table_length/table_length;
+const float converted_ball_radius = ball_radius * meter_to_coord;
+const float converted_pocket_radius = pocket_radius * meter_to_coord;
+
+const float MAX_FORCE = 200.0f; //TODO: tweak
+
+const float frame_time = 1.0f / fps;
+
+const float degree_to_radian = 3.14159265f/180.f;
 
 GLfloat white[] = {1, 1, 1, 1};
 GLfloat green[] = {0, 1, 0, 1};
@@ -62,80 +28,30 @@ GLfloat yellow[] = {1, 1, 0, 1};
 GLfloat pink[] = {1, 0, 1, 1};
 GLfloat lightBlue[] = {0, 1, 1, 1};
 
-//GLfloat camRotX, camRotY, camPosX, camPosY, camPosZ;
-GLuint cueBallList, tableList;
-GLfloat tableZ = 0.30;
-
 float cueBallPower = 0.0f;
 int cueBallAngle = 90;
 
 Table* table;
 Ball* balls[NUM_OF_BALLS];
+Ball* pockets[NUM_OF_POCKETS];
 
-void drawCircle(float radius)
+/*****************************************************************************
+							Helper Functions
+******************************************************************************/
+
+/*
+* Initialize the table object
+*/
+void setupTable(float length)
 {
-   glBegin(GL_LINE_LOOP);
-
-   for (int i=0; i<360; i++)
-   {
-      float degInRad = i*DEG2RAD;
-      glVertex2f(cos(degInRad)*radius, sin(degInRad)*radius);
-   }
-
-   glEnd();
+	table = new Table(length);
 }
 
 /*
-* Draw a green table and the pockets.
+* Initialize the balls and set their locations
 */
-void drawTable(void)
+void setupBalls(float radius, int numOfBalls)
 {
-	glPushMatrix();
-	{
-		glTranslatef(BORDER, BORDER, 0);
-		glCallList(tableList);
-	}
-	glPopMatrix();
-}
-
-/*
-* Draw the balls.
-*/
-void drawBalls(void)
-{
-	//NOTE: Place to draw balls
-	for (int i = 0; i < NUM_OF_BALLS; i++)
-	{
-		glPushMatrix();
-		{
-			glTranslatef(BORDER + balls[i]->position.x * METER2COORD,
-						BORDER + balls[i]->position.y * METER2COORD, 0.0f);
-
-			if (i == 0)
-				glColor4fv(white);
-			else
-				glColor4fv(red);
-
-			drawCircle(BALL_RADIUS);
-		}
-		glPopMatrix();
-	}
-}
-
-/*
-* Set up the game and initialize values:
-*	coordinates of the balls
-*	velocities of the balls
-*	speed of the balls
-*/
-void setupGame()
-{
-	table = new Table(2.7);
-	for (int i = 0; i < 16; i++)
-	{
-		balls[i] = new Ball(B_RADIUS, i);
-	}
-
 	/* The balls are set up as follows
 						0
 
@@ -151,48 +67,163 @@ void setupGame()
 
 	Note that the the radius of any three touching ball forms an
 	equalaterial triangle. The distance between each row is root_three * r.
-	The distance between each column is 2*r. A little extra room is added
-	inbetween all of the balls.
-	*/
+	The distance between each column is 2*r. A little extra room (0.0001) is
+	added inbetween all of the balls. */
 
-	const float epsilon = 0.001f;
+	for (int i = 0; i < numOfBalls; i++)
+	{
+		balls[i] = new Ball(radius, i);
+	}
 
-	float x = T_LENGTH/4;
-	float y = T_LENGTH/4;
+	// add some extra room so the balls are not touching
+	radius += 0.0005f;
+
+	const float root_three = sqrt(3);
+
+	float x = table->length/4;
+	float y = table->length/4;
 	balls[0]->position.set(x, y, 0.0f); // cue ball
 
 	x = x * 3;
 	int counter = 0;
-	for (int i = 1; i < 16; i++)
+	for (int i = 1; i < numOfBalls; i++)
 	{
 		if (i == 2 || i == 4 || i == 7 || i == 11)
 		{
-			x = x + ROOT_THREE * B_RADIUS + epsilon;
-			y = y - B_RADIUS + epsilon;
+			x = x + root_three * radius;
+			y = y - radius;
 			counter = 0;
 		}
 
-		balls[i]->position.set(x + epsilon, y + 2 * counter * B_RADIUS + epsilon, 0.0f);
+		balls[i]->position.set(x, y + 2 * counter * radius, 0.0f);
 		counter++;
 	}
+}
 
-	// //DEBUG: create and place a custom ball for ball[1]
-	// balls[1]->position.set(T_LENGTH/4 + 4 * B_RADIUS,
-	// 					T_LENGTH/4 + B_RADIUS, 0.0f);
+/*
+* Initialize the pockets and set their locations
+*/
+void setupPockets(float radius, int numOfPockets)
+{
+	/* The pockets are set up as following
+		P0------------------P1------------------P2
+		|										|
+		|										|
+		|										|
+		|										|
+		|										|
+		P3------------------P4------------------P5
 
-	// //DEBUG: print out the position of all the balls
-	// for (int i = 0; i < 2; i++)
+		There are 4 corner pockets and 2 side pockets.
+	*/
+
+	for (int i = 0; i < numOfPockets; i++)
+	{
+		pockets[i] = new Ball(radius, i);
+	}
+
+	float x = 0.0f;
+	float y = 0.0f;
+
+	for (int i = 0; i < numOfPockets; i++)
+	{
+		if (i == 3)
+		{
+			x = 0.0f;
+			y = table->width;
+		}
+
+		pockets[i]->position.set(x, y, 0.0f);
+		x = x + table->width;
+	}
+
+	//DEBUG: printing out the locations of the pockets
+	// for (int i = 0; i < numOfPockets; i++)
 	// {
-	// 	printf("Ball %d %f %f %f\n", i, balls[i]->position.x,
-	// 		balls[i]->position.y, balls[i]->position.z);
+	// 	printf("Pocket %d ", i);
+	// 	pockets[i]->position.print();
 	// }
+}
+
+/*
+* Helper function used to draw the balls in 2d
+*/
+void drawCircle(float radius)
+{
+   glBegin(GL_LINE_LOOP);
+
+   for (int i=0; i<360; i++)
+   {
+      float degInRad = i*degree_to_radian;
+      glVertex2f(cos(degInRad)*radius, sin(degInRad)*radius);
+   }
+
+   glEnd();
+}
+
+/*
+* Draw a green table.
+*/
+void drawTable()
+{
+	glPushMatrix();
+	{
+		glTranslatef(border, border, 0);
+		glColor3f(0, 1, 1);
+		glRectf(0, 0, converted_table_length, converted_table_width);
+	}
+	glPopMatrix();
+}
+
+/*
+* Draw the balls by looping through the global **balls.
+*/
+void drawBalls()
+{
+	for (int i = 0; i < NUM_OF_BALLS; i++)
+	{
+		//TODO: draw the balls with different colors
+		glPushMatrix();
+		{
+			glTranslatef(border + balls[i]->position.x * meter_to_coord,
+						border + balls[i]->position.y * meter_to_coord, 0.0f);
+
+			if (i == 0)
+				glColor4fv(white);
+			else
+				glColor4fv(red);
+
+			drawCircle(converted_ball_radius);
+		}
+		glPopMatrix();
+	}
+}
+
+/*
+* Draw the pockets.
+*/
+void drawPockets()
+{
+	for (int i = 0; i < NUM_OF_POCKETS; i++)
+	{
+		glPushMatrix();
+		{
+			glTranslatef(border + pockets[i]->position.x * meter_to_coord,
+						border + pockets[i]->position.y * meter_to_coord, 0.0f);
+
+			glColor4fv(yellow);
+
+			drawCircle(converted_pocket_radius);
+		}
+		glPopMatrix();
+	}
 }
 
 
 /*
 * Set up the lights.
 */
-void initLights(void)
+void initLights()
 {
 	// Lights & Materials
 	GLfloat ambient[] = {0.2, 0.2, 0.2, 1.0};
@@ -215,13 +246,13 @@ void initLights(void)
 /*
 * Set up the rendering context.
 */
-void setupRenderingContext(void)
+void setupRenderingContext()
 {
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 
 	// set up 2D projection
-	glOrtho(0.0f, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0f, 0.0f, 1.0f);
+	glOrtho(0.0f, window_width, window_height, 0.0f, 0.0f, 1.0f);
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
@@ -232,35 +263,6 @@ void setupRenderingContext(void)
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 
 	//initLights();
-
-	tableList = glGenLists(1);
-	glNewList(tableList, GL_COMPILE);
-		glColor3f(0, 1, 1);
-		glRectf(0, 0, TABLE_LENGTH, TABLE_WIDTH);
-	glEndList();
-
-}
-
-/*
-* Draws the table and the balls
-*/
-void display(void)
-{
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	// reset modelview matrix, might not be necessary
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-
-	glPushMatrix();
-	{
-		drawTable();
-		drawBalls();
-	}
-	glPopMatrix();
-
-	glFlush();
-	glutSwapBuffers();
 }
 
 float collisionPoint(Ball *ball1, Ball *ball2, float frameTime, float distanceAtFrameEnd, float collisionDistance)
@@ -310,16 +312,15 @@ void collide(Ball *ball1, Ball *ball2, float frameTime)
 	}
 }
 
-void updatePhysics()
+void updatePhysics(float timePassed)
 {
 	//printf("updatePhysics is called!\n");
-	//TODO: update all the balls
 	for (int i = 0; i < NUM_OF_BALLS; i++)
 	{
 		// first, update the ball's position if it's moving
 		if (balls[i]->velocity.length() > 0.0f)
 		{
-			balls[i]->position = balls[i]->position + (FRAME_TIME * balls[i]->velocity);
+			balls[i]->position = balls[i]->position + (timePassed * balls[i]->velocity);
 		}
 
 		// now check for collision with table
@@ -338,13 +339,58 @@ void updatePhysics()
 		// now check for collision with any other ball
 		for (int j = i + 1; j < NUM_OF_BALLS; j++)
 		{
-			collide(balls[i], balls[j], FRAME_TIME);
+			collide(balls[i], balls[j], timePassed);
 		}
 
 		// now update velocity
-
+		if (balls[i]->velocity.length() > 0.0f)
+		{
+			balls[i]->velocity = 0.99 * balls[i]->velocity;
+			if (balls[i]->velocity.length() < 0.00001)
+			{
+				balls[i]->velocity.reset();
+			}
+		}
 
 	}
+}
+
+
+/*****************************************************************************
+							Public Functions
+******************************************************************************/
+
+/*
+* Set up the game components.
+*/
+void setupGame()
+{
+	setupTable(table_length);
+	setupBalls(ball_radius, NUM_OF_BALLS);
+	setupPockets(pocket_radius, NUM_OF_POCKETS);
+}
+
+/*
+* Draws the table and the balls
+*/
+void display()
+{
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	// reset modelview matrix, might not be necessary
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glPushMatrix();
+	{
+		drawTable();
+		drawPockets();
+		drawBalls();
+	}
+	glPopMatrix();
+
+	glFlush();
+	glutSwapBuffers();
 }
 
 time_t startTime;
@@ -359,24 +405,20 @@ void update()
 	// accumulator += difftime(currentTime, startTime);
 	// startTime = currentTime;
 
-	// // if (accumulator > 0.2f)
-	// // 	accumulator = 0.2f;
-
 	// if (accumulator > 1.f)
 	// 	accumulator = 1.f;
 
-	// printf("accumulator: %f\n", accumulator);
-	// printf("FRAME_TIME: %f\n", FRAME_TIME);
+	// // printf("accumulator: %f\n", accumulator);
 
-	// while (accumulator >= FRAME_TIME)
+	// while (accumulator >= frame_time)
 	// {
-	// 	updatePhysics();
-	// 	accumulator -= FRAME_TIME;
+	// 	updatePhysics(frame_time);
+	// 	accumulator -= frame_time;
 	// }
 
-	//alpha = accumulator / FRAME_TIME;
+	//alpha = accumulator / frame_time;
 
-	updatePhysics();
+	updatePhysics(frame_time);
 	glutPostRedisplay();
 }
 
@@ -408,9 +450,9 @@ void keyboard(unsigned char key, int x, int y)
 				points to the direction and are assigned to the
 				cue ball.*/
 
-				float speed = cueBallPower * MAX_FORCE / METER2COORD;
-				balls[0]->velocity.set(sin(cueBallAngle * DEG2RAD) * speed,
-									cos(cueBallAngle * DEG2RAD) * speed,
+				float speed = cueBallPower * MAX_FORCE / meter_to_coord;
+				balls[0]->velocity.set(sin(cueBallAngle * degree_to_radian) * speed,
+									cos(cueBallAngle * degree_to_radian) * speed,
 									0.0f);
 
 				cueBallPower = 0; // reset the power
@@ -422,8 +464,8 @@ void keyboard(unsigned char key, int x, int y)
 										balls[0]->velocity.y,
 										balls[0]->velocity.z);
 				//printf("Start time: %ld\n", startTime);
-
-				glutPostRedisplay();
+				update();
+				//glutPostRedisplay();
 			}
 			break;
 	}
