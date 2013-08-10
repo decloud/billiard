@@ -31,9 +31,14 @@ GLfloat lightBlue[] = {0, 1, 1, 1};
 float cueBallPower = 0.0f;
 int cueBallAngle = 90;
 
-Table* table;
-Ball* balls[NUM_OF_BALLS];
-Ball* pockets[NUM_OF_POCKETS];
+Table *table;
+Ball *balls[NUM_OF_BALLS];
+Ball *pockets[NUM_OF_POCKETS];
+bool ballVisible[NUM_OF_BALLS];
+
+time_t startTime;
+float accumulator = 0.0f;
+//float alpha = 0.0f;
 
 /*****************************************************************************
 							Helper Functions
@@ -73,6 +78,7 @@ void setupBalls(float radius, int numOfBalls)
 	for (int i = 0; i < numOfBalls; i++)
 	{
 		balls[i] = new Ball(radius, i);
+		ballVisible[i] = true;
 	}
 
 	// add some extra room so the balls are not touching
@@ -182,6 +188,11 @@ void drawBalls()
 {
 	for (int i = 0; i < NUM_OF_BALLS; i++)
 	{
+		if (!ballVisible[i])
+		{
+			continue;
+		}
+
 		//TODO: draw the balls with different colors
 		glPushMatrix();
 		{
@@ -219,28 +230,37 @@ void drawPockets()
 	}
 }
 
-
 /*
-* Set up the lights.
+* Respond when the user presses the p key.
+* Convert the angle and power into vectors and add to the cue ball.
 */
-void initLights()
+void powerKey()
 {
-	// Lights & Materials
-	GLfloat ambient[] = {0.2, 0.2, 0.2, 1.0};
-	GLfloat position[] = {0.0, 0.0, 2.0, 1.0};
-	GLfloat mat_diffuse[] = {0.6, 0.6, 0.6, 1.0};
-	GLfloat mat_specular[] = {1.0, 1.0, 1.0, 1.0};
-	GLfloat mat_shininess[] = {50.0};
+	if (cueBallPower > 0.0)
+	{
+		/* Assume angle starts at the top of the y-axis
+		and goes clockwise around the quadrant.The angles
+		are decomposed into a pair of unit vectors that
+		points to the direction and are assigned to the
+		cue ball.*/
 
-	glEnable(GL_LIGHTING);
-	glEnable(GL_LIGHT0);
+		float speed = cueBallPower * MAX_FORCE / meter_to_coord;
+		balls[0]->velocity.set(sin(cueBallAngle * degree_to_radian) * speed,
+							cos(cueBallAngle * degree_to_radian) * speed,
+							0.0f);
 
-	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
-	glLightfv(GL_LIGHT0, GL_POSITION, position);
+		cueBallPower = 0; // reset the power
+		startTime = time(NULL);
 
-	glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);
-	glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
-	glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
+		//DEBUG: Printing out parameters of the cue ball
+		printf("Cueball Velocity: x: %f y: %f z: %f\n",
+								balls[0]->velocity.x,
+								balls[0]->velocity.y,
+								balls[0]->velocity.z);
+		//printf("Start time: %ld\n", startTime);
+		update();
+		//glutPostRedisplay();
+	}
 }
 
 /*
@@ -265,7 +285,8 @@ void setupRenderingContext()
 	//initLights();
 }
 
-float collisionPoint(Ball *ball1, Ball *ball2, float frameTime, float distanceAtFrameEnd, float collisionDistance)
+float collisionPoint(Ball *ball1, Ball *ball2, float frameTime,
+							float distanceAtFrameEnd, float collisionDistance)
 {
 	Vector ball1FrameStartPosition = ball1->position - (frameTime * ball1->velocity);
 	Vector ball2FrameStartPosition = ball2->position - (frameTime * ball2->velocity);
@@ -312,28 +333,124 @@ void collide(Ball *ball1, Ball *ball2, float frameTime)
 	}
 }
 
+bool collideWithPockets(Ball *ball)
+{
+	float x = ball->position.x;
+	float y = ball->position.y;
+	float radius = ball->radius;
+	int id = ball->id;
+
+	// P0------------------P1------------------P2
+	// |										|
+	// |										|
+	// |										|
+	// |										|
+	// |										|
+	// P3------------------P4------------------P5
+
+	// check for collision with left side of table
+	if (x - radius < 0)
+	{
+		ball->velocity.x = -1 * ball->velocity.x;
+
+		if (id != 0)
+		{
+			// check for collision with the pockets on the left (0 and 3)
+			if (y < (pockets[0]->position.y + pockets[0]->radius) ||
+				y > pockets[3]->position.y - pockets[3]->radius)
+			{
+				ballVisible[id] = false;
+				return true;
+			}
+		}
+	}
+
+	// check for collision with rightside of table
+	if (x + radius > table->length)
+	{
+		ball->velocity.x = -1 * ball->velocity.x;
+
+		if (id != 0)
+		{
+			// check for collision with the pockets on the left (2 and 5)
+			if (y < (pockets[2]->position.y + pockets[2]->radius) ||
+				y > pockets[5]->position.y - pockets[5]->radius)
+			{
+				ballVisible[id] = false;
+				return true;
+			}
+		}
+	}
+
+	// check for collision with top of table
+	if (y - radius < 0)
+	{
+		ball->velocity.y = -1 * ball->velocity.y;
+
+		if (id != 0)
+		{
+			// check for collision with the pockets on the top (0, 1, and 2)
+			if (x < (pockets[0]->position.x + pockets[0]->radius) ||
+				x > pockets[2]->position.x - pockets[2]->radius  ||
+				(x > pockets[1]->position.x - pockets[1]->radius &&
+				x < pockets[1]->position.x + pockets[1]->radius )
+				)
+			{
+				ballVisible[id] = false;
+				return true;
+			}
+		}
+	}
+
+	// check for collision with bottom of table
+	if (y + radius > table->width)
+	{
+		ball->velocity.y = -1 * ball->velocity.y;
+
+		if (id != 0)
+		{
+			// check for collision with the pockets on the top (3, 4, and 5)
+			if (x < (pockets[3]->position.x + pockets[3]->radius) ||
+				x > pockets[5]->position.x - pockets[5]->radius  ||
+				(x > pockets[4]->position.x - pockets[4]->radius &&
+				x < pockets[4]->position.x + pockets[4]->radius )
+				)
+			{
+				ballVisible[id] = false;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/*
+* Perform collision detecton and collision resolution for all the balls
+* and also update their speed
+*/
 void updatePhysics(float timePassed)
 {
 	//printf("updatePhysics is called!\n");
 	for (int i = 0; i < NUM_OF_BALLS; i++)
 	{
+		// only update the physics for balls that are visible
+		if (!ballVisible[i])
+		{
+			continue;
+		}
+
 		// first, update the ball's position if it's moving
 		if (balls[i]->velocity.length() > 0.0f)
 		{
-			balls[i]->position = balls[i]->position + (timePassed * balls[i]->velocity);
+			balls[i]->position = balls[i]->position +
+											(timePassed * balls[i]->velocity);
 		}
 
-		// now check for collision with table
-		if (balls[i]->position.x + balls[i]->radius > table->length
-			|| balls[i]->position.x - balls[i]->radius < 0 )
+		if (collideWithPockets(balls[i]))
 		{
-			balls[i]->velocity.x = -1 * balls[i]->velocity.x;
-		}
-
-		if (balls[i]->position.y + balls[i]->radius > table->width
-			|| balls[i]->position.y - balls[i]->radius < 0 )
-		{
-			balls[i]->velocity.y = -1 * balls[i]->velocity.y;
+			printf("collided with pocket!\n");
+			continue;
 		}
 
 		// now check for collision with any other ball
@@ -351,7 +468,6 @@ void updatePhysics(float timePassed)
 				balls[i]->velocity.reset();
 			}
 		}
-
 	}
 }
 
@@ -368,6 +484,29 @@ void setupGame()
 	setupTable(table_length);
 	setupBalls(ball_radius, NUM_OF_BALLS);
 	setupPockets(pocket_radius, NUM_OF_POCKETS);
+}
+
+/*
+* Set up the lights.
+*/
+void initLights()
+{
+	// Lights & Materials
+	GLfloat ambient[] = {0.2, 0.2, 0.2, 1.0};
+	GLfloat position[] = {0.0, 0.0, 2.0, 1.0};
+	GLfloat mat_diffuse[] = {0.6, 0.6, 0.6, 1.0};
+	GLfloat mat_specular[] = {1.0, 1.0, 1.0, 1.0};
+	GLfloat mat_shininess[] = {50.0};
+
+	glEnable(GL_LIGHTING);
+	glEnable(GL_LIGHT0);
+
+	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT0, GL_POSITION, position);
+
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);
+	glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+	glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
 }
 
 /*
@@ -393,9 +532,6 @@ void display()
 	glutSwapBuffers();
 }
 
-time_t startTime;
-float accumulator = 0.0f;
-//float alpha = 0.0f;
 /*
 * Update the parameters of the balls.
 */
@@ -437,36 +573,13 @@ void reshape(int width, int height)
 */
 void keyboard(unsigned char key, int x, int y)
 {
-	switch(key){
+	switch(key)
+	{
 		case 27: // Escape key
 			exit(0);
 			break;
 		case 112: // p key
-			// only works when the cue ball has stopped
-			if (cueBallPower > 0.0) {
-				/* Assume angle starts at the top of the y-axis
-				and goes clockwise around the quadrant.The angles
-				are decomposed into a pair of unit vectors that
-				points to the direction and are assigned to the
-				cue ball.*/
-
-				float speed = cueBallPower * MAX_FORCE / meter_to_coord;
-				balls[0]->velocity.set(sin(cueBallAngle * degree_to_radian) * speed,
-									cos(cueBallAngle * degree_to_radian) * speed,
-									0.0f);
-
-				cueBallPower = 0; // reset the power
-				startTime = time(NULL);
-
-				//DEBUG: Printing out parameters of the cue ball
-				printf("Cueball Velocity: x: %f y: %f z: %f\n",
-										balls[0]->velocity.x,
-										balls[0]->velocity.y,
-										balls[0]->velocity.z);
-				//printf("Start time: %ld\n", startTime);
-				update();
-				//glutPostRedisplay();
-			}
+			powerKey();
 			break;
 	}
 	//DEBUG: Print out the key that is pressed
