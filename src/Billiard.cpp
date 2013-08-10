@@ -231,7 +231,6 @@ void drawPockets()
 }
 
 /*
-* Respond when the user presses the p key.
 * Convert the angle and power into vectors and add to the cue ball.
 */
 void powerKey()
@@ -243,6 +242,9 @@ void powerKey()
 		are decomposed into a pair of unit vectors that
 		points to the direction and are assigned to the
 		cue ball.*/
+
+		//DEBUG: max power
+		//cueBallPower = 1.0;
 
 		float speed = cueBallPower * MAX_FORCE / meter_to_coord;
 		balls[0]->velocity.set(sin(cueBallAngle * degree_to_radian) * speed,
@@ -261,6 +263,14 @@ void powerKey()
 		update();
 		//glutPostRedisplay();
 	}
+}
+
+/*
+* Reset the game and place the balls into their original location
+*/
+void resetGame()
+{
+	setupGame();
 }
 
 /*
@@ -581,9 +591,10 @@ void keyboard(unsigned char key, int x, int y)
 		case 112: // p key
 			powerKey();
 			break;
+		case 114: // r key
+			resetGame();
+			break;
 	}
-	//DEBUG: Print out the key that is pressed
-	//printf("Key pressed: %c\n", key);
 }
 
 /*
