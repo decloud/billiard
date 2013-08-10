@@ -19,4 +19,6 @@ A Billiard Implementation in OpenGL and C++
 # Usage
 - Use the Up and Down arrow keys to adjust the power
 - Use the Left and Right arrow keys to adjust the angle
+- Press the `p` key to shoot
+- Press the `r` key to reset the game
 
